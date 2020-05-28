@@ -1,7 +1,7 @@
 {
-    "name": "niko",
+    "name": "fly mouse",
     "version": "0.0.1",
-    "description": "ScienceStorm Niko robot package",
+    "description": "ScienceStorm fly mouse robot package",
     "license": "MIT",
     "dependencies": {
         "core": "*"
@@ -9,11 +9,7 @@
     "files": [
         "README.md",
         "main.ts",
-        "pcf8574.ts",
         "ps2.ts",
-        "dht11.ts",
-        "rgbled.ts",
-        "sonar.ts",
         "_locales/zh/niko-jsdoc-strings.json",
         "_locales/zh/niko-strings.json"
     ],
