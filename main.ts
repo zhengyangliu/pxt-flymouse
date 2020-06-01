@@ -236,7 +236,7 @@ namespace flymouse {
         pins.i2cWriteBuffer(I2C_ADDR, bufr);
     }
 
-    //% blockId=writeOLED block="write string %str to OLED"
+    //% blockId=writeOLED block="oled write string %str"
     //% group="Basic"
     export function writeOLED(str: string) {
 
@@ -260,9 +260,11 @@ namespace flymouse {
         pins.i2cWriteBuffer(I2C_ADDR, bufr);
     }
 
-    export function writeOLEDnumber(str: string, num: number{
-        writeOLED(str + '=' + num.toString);
-    })
+    //% blockId=writeOLEDnumber block="oled write number %str = %num"
+    //% group="Basic"
+    export function writeOLEDnumber(str: string, num: number) {
+        writeOLED(str + '=' + num.toString());
+    }
 
     /**
      * read touch sensor
