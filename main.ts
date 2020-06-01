@@ -1,268 +1,568 @@
 /**
-* StormScience Niko robot package
+* StormScience flymouse robot package
 * @author ArthurZheng
 */
 //% weight=10 icon="\uf135" color=#2896ff
-namespace niko {
+namespace flymouse {
+
+    export enum Color {
+        //% block=Red
+        Red = 0xFF0000,
+        //% block=Orange
+        Orange = 0xFFA500,
+        //% block=Yellow
+        Yellow = 0xFFFF00,
+        //% block=Green
+        Green = 0x00FF00,
+        //% block=Blue
+        Blue = 0x0000FF,
+        //% block=Indigo
+        Indigo = 0x4b0082,
+        //% block=Violet
+        Violet = 0x8a2be2,
+        //% block=Purple
+        Purple = 0xFF00FF,
+        //% block=White
+        White = 0xFFFFFF,
+        //% block=Black
+        Black = 0x000000
+    }
+
+    export enum Rgbled {
+        //% block="LED1"
+        LED1 = 0x01,
+        //% block="LED2"
+        LED2 = 0x02,
+        //% block="LED3"
+        LED3 = 0x03,
+        //% block="LED4"
+        LED4 = 0x04,
+    }
+
+    export enum IRsensor {
+        //% block="IR1"
+        IR1 = 0x01,
+        //% block="IR2"
+        IR2 = 0x02,
+        //% block="IR3"
+        IR3 = 0x03,
+        //% block="IR4"
+        IR4 = 0x04,
+        //% block="IR5"
+        IR5 = 0x05,
+        //% block="IR6"
+        IR6 = 0x06,
+    }
+
+    export enum LedState {
+        //% block="OFF"
+        OFF = 0x00,
+        //% block="ON"
+        ON = 0x01,
+    }
 
     export enum Motor {
         //% block="M1"
-        M1 = 0,
+        M1 = 0x00,
         //% block="M2"
-        M2 = 1,
-        //% block="M3"
-        M3 = 2,
-        //% block="M4"
-        M4 = 3
+        M2 = 0x01,
     }
 
-    export enum Direction {
-        //% block="Forward"
-        Forward = 0,
-        //% block="Backward"
-        Backward = 1,
-        //% block="Left"
-        Left = 2,
-        //% block="Right"
-        Right = 3,
-        //% block="Clockwise"
-        Clockwise = 4,
-        //% block="Anti-clockwise"
-        AntiClockwise = 5,
+    export enum RGB {
+        //% block="R"
+        R = 0x00,
+        //% block="G"
+        G = 0x01,
+        //% block="B"
+        B = 0x02,
     }
 
-    // pin define
-    const M1_DIR = pcf8574x.IO.P6;
-    const M2_DIR = pcf8574x.IO.P5;
-    const M3_DIR = pcf8574x.IO.P3;
-    const M4_DIR = pcf8574x.IO.P2;
-    const MOTOR_BRK = pcf8574x.IO.P4;
-    const GUN_EN = pcf8574x.IO.P7;
+    // fly mouse bottom board i2c address
+    const I2C_ADDR = 0xA0 >> 1;
 
-    const M1_EN = AnalogPin.P7;
-    const M2_EN = AnalogPin.P6;
-    const M3_EN = AnalogPin.P5;
-    const M4_EN = AnalogPin.P4;
+    /**
+     * I2C protocol 
+     */
+    /* bit0 - write/read */
+    const PROTOCOL_READ = 0x80
+    const PROTOCOL_WRITE = 0x81
+    const PROTOCOL_OLED = 0x82
 
-    const M1_RREVERSE = false;
-    const M2_RREVERSE = false;
-    const M3_RREVERSE = false;
-    const M4_RREVERSE = false;
+    /* bit1 - read function */
+    const PROTOCOL_RD_TEST = 0x00
+    const PROTOCOL_RD_IR1 = 0x01
+    const PROTOCOL_RD_IR2 = 0x02
+    const PROTOCOL_RD_IR3 = 0x03
+    const PROTOCOL_RD_IR4 = 0x04
+    const PROTOCOL_RD_IR5 = 0x05
+    const PROTOCOL_RD_IR6 = 0x06
+    const PROTOCOL_RD_BATT = 0x07
+    const PROTOCOL_RD_SOUND = 0x08
+    const PROTOCOL_RD_LIGHT = 0x09
+    const PROTOCOL_RD_TOUCH = 0x0A
+    const PROTOCOL_RD_COLOR = 0x0B
+    const PROTOCOL_RD_ENCODE1 = 0x0C
+    const PROTOCOL_RD_ENCODE2 = 0x0D
+    const PROTOCOL_RD_ULTRASONIC = 0x0E
+    const PROTOCOL_RD_PWKEY = 0x0F
 
-    let _lastM1Speed = 0;
-    let _lastM2Speed = 0;
-    let _lastM3Speed = 0;
-    let _lastM4Speed = 0;
+    /* bit1 - write function */
+    const PROTOCOL_WR_LIGHT1 = 0x00
+    const PROTOCOL_WR_LIGHT2 = 0x01
+    const PROTOCOL_WR_LIGHT3 = 0x02
+    const PROTOCOL_WR_LIGHT4 = 0x03
+    const PROTOCOL_WR_MOTOR1 = 0x04
+    const PROTOCOL_WR_MOTOR2 = 0x05
+    const PROTOCOL_WR_MOTOR_BRK = 0x06
+    const PROTOCOL_WR_TCS_CALI = 0x07     // TCS3200校准
+    const PROTOCOL_WR_TCS_LED = 0x08
+    const PROTOCOL_WR_CLR_ENCODE = 0x09
 
-    // 10Khz 100us
-    const MOTOR_PWM_PERIOD = 100;
+    const PROTOCOL_I2C_DATA_MAX_LEN = 18
+    const PROTOCOL_RD_TEST_REP = 0xCA
 
-    //% blockId=initNiko block="initialise niko"
-    //% weight=100
-    //% blockGap=50
-    export function initNiko() {
+    let _last_i2c_cmd_time = 0;
+    let _last_oled_cmd_time = 0;
 
-        pcf8574x.configAddress(0x20);
-        pcf8574x.writeMode(0);
+    const I2C_CMD_MIN_INTERVAL = 1; // 1ms
+    const OLED_CMD_MIN_INTERVAL = 50; // 50ms
 
-        pins.analogSetPeriod(M1_EN, MOTOR_PWM_PERIOD);
-        pins.analogSetPeriod(M2_EN, MOTOR_PWM_PERIOD);
-        pins.analogSetPeriod(M3_EN, MOTOR_PWM_PERIOD);
-        pins.analogSetPeriod(M4_EN, MOTOR_PWM_PERIOD);
+    let _last_M1_speed = 0;
+    let _last_M2_speed = 0;
 
-        initPS2();
+    // 电机速度换向后刹车时长
+    const DIR_CHANGE_BRK_TIME = 10;
+
+    const ENCODER_BASE_PULSE = 7;
+    const MOTOR_DECELERATION_RATIO = 30;
+
+    // 储存TCS3200颜色传感器数据
+    let color_sensor = 0;
+
+    /**
+     * start a protocol command with time pulse check
+     * This funciton can provide Too fast command interval
+     */
+    function protocolCmd_start(cmd: number) {
+
+        // 当指令间隔小于 I2C_CMD_MIN_INTERVAL
+        while ((input.runningTime() - _last_i2c_cmd_time) < I2C_CMD_MIN_INTERVAL) {
+            control.waitMicros(10);
+        }
+        _last_i2c_cmd_time = input.runningTime();
+
+        pins.i2cWriteNumber(I2C_ADDR, cmd, NumberFormat.UInt8LE, false);
     }
 
     /**
-     * set motor speed
-     * @param {Motor} m - the motor want to sets
-     * @param {number} speed - run speed 
+     * check whether i2c communication is ok
+     * @return {boolean} true ok, false nok
      */
-    //% blockId=setMotorSpeed block="set motor $m speed as $speed"
-    //% speed.min=-1023 speed.max=1023
-    //% speed.defl=0
-    //% weight=96
-    export function setMotorSpeed(m: Motor, speed: number) {
+    function checkI2c(): boolean {
 
-        // release brake
-        pcf8574x.writePinMode(MOTOR_BRK, pcf8574x.Mode.Low);
+        protocolCmd_start(PROTOCOL_READ);
+        pins.i2cWriteNumber(I2C_ADDR, PROTOCOL_RD_TEST, NumberFormat.UInt8LE, false);
+        let rep = pins.i2cReadNumber(I2C_ADDR, NumberFormat.UInt8LE, false);
 
-        if (m == Motor.M1) {
-            // if speed now is opposite to last time, brake 10ms to avoid motor short-circuit 
-            if ((_lastM1Speed < 0) && (speed > 0) || (_lastM1Speed > 0) && (speed < 0)) {
-                pcf8574x.writePinMode(M1_DIR, pcf8574x.Mode.High);
-                pins.analogWritePin(M1_EN, speed);
-                _lastM1Speed = speed;
-            }
-            // set dir pin and pwm pluse
-            if (speed >= 0) {
-                pcf8574x.writePinMode(M1_DIR, pcf8574x.Mode.High);
-                pins.analogWritePin(M1_EN, speed);
-                _lastM1Speed = speed;
-            }
-            else {
-                pcf8574x.writePinMode(M1_DIR, pcf8574x.Mode.Low);
-                pins.analogWritePin(M1_EN, -speed);
-                _lastM1Speed = speed;
-            }
-        }
-        else if (m == Motor.M2) {
-            if ((_lastM1Speed < 0) && (speed > 0) || (_lastM1Speed > 0) && (speed < 0)) {
-                pcf8574x.writePinMode(M2_DIR, pcf8574x.Mode.High);
-                pins.analogWritePin(M2_EN, speed);
-                _lastM1Speed = speed;
-            }
-            if (speed >= 0) {
-                pcf8574x.writePinMode(M2_DIR, pcf8574x.Mode.High);
-                pins.analogWritePin(M2_EN, speed);
-                _lastM1Speed = speed;
-            }
-            else {
-                pcf8574x.writePinMode(M2_DIR, pcf8574x.Mode.Low);
-                pins.analogWritePin(M2_EN, -speed);
-                _lastM1Speed = speed;
-            }
-        }
-        else if (m == Motor.M3) {
-            if ((_lastM1Speed < 0) && (speed > 0) || (_lastM1Speed > 0) && (speed < 0)) {
-                pcf8574x.writePinMode(M3_DIR, pcf8574x.Mode.High);
-                pins.analogWritePin(M3_EN, speed);
-                _lastM1Speed = speed;
-            }
-            if (speed >= 0) {
-                pcf8574x.writePinMode(M3_DIR, pcf8574x.Mode.High);
-                pins.analogWritePin(M3_EN, speed);
-                _lastM1Speed = speed;
-            }
-            else {
-                pcf8574x.writePinMode(M3_DIR, pcf8574x.Mode.Low);
-                pins.analogWritePin(M3_EN, -speed);
-                _lastM1Speed = speed;
-            }
-        }
-        else if (m == Motor.M4) {
-            if ((_lastM1Speed < 0) && (speed > 0) || (_lastM1Speed > 0) && (speed < 0)) {
-                pcf8574x.writePinMode(M4_DIR, pcf8574x.Mode.High);
-                pins.analogWritePin(M4_EN, speed);
-                _lastM1Speed = speed;
-            }
-            if (speed >= 0) {
-                pcf8574x.writePinMode(M4_DIR, pcf8574x.Mode.High);
-                pins.analogWritePin(M4_EN, speed);
-                _lastM1Speed = speed;
-            }
-            else {
-                pcf8574x.writePinMode(M4_DIR, pcf8574x.Mode.Low);
-                pins.analogWritePin(M4_EN, -speed);
-                _lastM1Speed = speed;
-            }
-        }
-    }
-
-    /**
-     * break niko
-     */
-    //% blockId=brakeNiko block="brake niko"
-    //% weight=95
-    //% blockGap=50
-    export function brakeNiko() {
-        pins.analogWritePin(M1_EN, 0);
-        pins.analogWritePin(M2_EN, 0);
-        pins.analogWritePin(M3_EN, 0);
-        pins.analogWritePin(M4_EN, 0);
-        pcf8574x.writePinMode(MOTOR_BRK, pcf8574x.Mode.High);
-        basic.pause(10);
-    }
-
-    /**
-     * set machine gun state
-     * @param {boolean} state - true fire, false hold fire
-     */
-    //% blockId=setMachineGunState block="set machine gun shoot $state"
-    //% state.defl=false
-    //% weight=98
-    export function setMachineGunState(state: boolean) {
-        if (state == true) {
-            pcf8574x.writePinMode(GUN_EN, pcf8574x.Mode.High);
+        if (rep == PROTOCOL_RD_TEST_REP) {
+            return true;
         }
         else {
-            pcf8574x.writePinMode(GUN_EN, pcf8574x.Mode.Low);
+            return false;
+        }
+    }
+
+    //% blockId=initFlymouse block="initialise fly mouse"
+    //% weight=100
+    //% blockGap=50
+    export function initFlymouse() {
+        while (checkI2c() != true) {
+            basic.pause(200)
+        }
+
+        writeOLED(" ")
+        writeOLED("+----------------+");
+        writeOLED("| Microbit Onine |");
+        writeOLED("+----------------+");
+        writeOLED(" ");
+    }
+
+    //% blockId=writeOLED block="write string %str to OLED"
+    export function writeOLED(str: string) {
+
+        // 当指令间隔小于 OLED_CMD_MIN_INTERVAL
+        while ((input.runningTime() - _last_oled_cmd_time) < OLED_CMD_MIN_INTERVAL) {
+            control.waitMicros(10);
+        }
+        _last_oled_cmd_time = input.runningTime();
+
+        // 限制最大字符串打印长度
+        if (str.length > PROTOCOL_I2C_DATA_MAX_LEN) {
+            str = str.slice(0, 18)
+        }
+
+        let bufr = pins.createBuffer(str.length);
+        for (let i = 0; i < str.length; i++) {
+            bufr.setNumber(NumberFormat.UInt8LE, i, str.charCodeAt(i))
+        }
+        protocolCmd_start(PROTOCOL_OLED);
+        pins.i2cWriteNumber(I2C_ADDR, str.length, NumberFormat.UInt8LE, false);
+        pins.i2cWriteBuffer(I2C_ADDR, bufr);
+    }
+
+    /**
+     * configure the led by RGB value
+     * @param {number} offset - sequence number of the led
+     * @param {number} red - the brightness of red
+     * @param {number} green - the brightness of green
+     * @param {number} blue - the brightness of blue
+     */
+    //% blockId=setPixelRGB block="set led pixel %led r %red g %green b %blue"
+    //% inlineInputMode=inline
+    //% red.min=0 red.max=255
+    //% green.min=0 green.max=255
+    //% blue.min=0 blue.max=255
+    export function setPixelRGB(led: Rgbled, red: number, green: number, blue: number) {
+
+        let bufr = pins.createBuffer(3);
+        bufr.setNumber(NumberFormat.UInt8LE, 2, red);
+        bufr.setNumber(NumberFormat.UInt8LE, 1, green);
+        bufr.setNumber(NumberFormat.UInt8LE, 0, blue);
+
+        protocolCmd_start(PROTOCOL_WRITE);
+
+        if (led == Rgbled.LED1) {
+            pins.i2cWriteNumber(I2C_ADDR, PROTOCOL_WR_LIGHT1, NumberFormat.UInt8LE, false);
+        }
+        else if (led == Rgbled.LED2) {
+            pins.i2cWriteNumber(I2C_ADDR, PROTOCOL_WR_LIGHT2, NumberFormat.UInt8LE, false);
+        }
+        else if (led == Rgbled.LED3) {
+            pins.i2cWriteNumber(I2C_ADDR, PROTOCOL_WR_LIGHT3, NumberFormat.UInt8LE, false);
+        }
+        else {
+            pins.i2cWriteNumber(I2C_ADDR, PROTOCOL_WR_LIGHT4, NumberFormat.UInt8LE, false);
+        }
+
+        pins.i2cWriteBuffer(I2C_ADDR, bufr);
+    }
+
+    /**
+     * configure the led by color
+     * @param {number} offset - sequence number of the led
+     * @param {Color} color - color
+     */
+    //% blockId=setPixelColor block="set led pixel %led color %color"
+    export function setPixelColor(led: Rgbled, color: Color) {
+
+        setPixelRGB(led, ((color & 0xff0000) >> 16), ((color & 0x00ff00) >> 8), (color & 0x0000ff));
+    }
+
+    /**
+     * read ir sensors
+     * @param {IRsensor}  ir - sequence number of ir sensors
+     * @return {number} 0 ~ 4095, biger means closer
+     */
+    //% blockId=readIRsensor block="read infrared sensor %ir"
+    export function readIRsensor(ir: IRsensor): number {
+
+        protocolCmd_start(PROTOCOL_READ);
+
+        if (ir == IRsensor.IR1) {
+            pins.i2cWriteNumber(I2C_ADDR, PROTOCOL_RD_IR1, NumberFormat.UInt8LE, false);
+        }
+        else if (ir == IRsensor.IR2) {
+            pins.i2cWriteNumber(I2C_ADDR, PROTOCOL_RD_IR2, NumberFormat.UInt8LE, false);
+        }
+        else if (ir == IRsensor.IR3) {
+            pins.i2cWriteNumber(I2C_ADDR, PROTOCOL_RD_IR3, NumberFormat.UInt8LE, false);
+        }
+        else if (ir == IRsensor.IR4) {
+            pins.i2cWriteNumber(I2C_ADDR, PROTOCOL_RD_IR4, NumberFormat.UInt8LE, false);
+        }
+        else if (ir == IRsensor.IR5) {
+            pins.i2cWriteNumber(I2C_ADDR, PROTOCOL_RD_IR5, NumberFormat.UInt8LE, false);
+        }
+        else if (ir == IRsensor.IR6) {
+            pins.i2cWriteNumber(I2C_ADDR, PROTOCOL_RD_IR6, NumberFormat.UInt8LE, false);
+        }
+
+        return 0xfff - pins.i2cReadNumber(I2C_ADDR, NumberFormat.UInt16LE, false);
+    }
+
+    /**
+     * read sound sensor
+     * @return {number} 0 ~ 4095, bigger means closer
+     */
+    //% blockId=readSoundsensor block="read sound sensor"
+    export function readSoundsensor(): number {
+
+        protocolCmd_start(PROTOCOL_READ);
+
+        pins.i2cWriteNumber(I2C_ADDR, PROTOCOL_RD_SOUND, NumberFormat.UInt8LE, false);
+
+        return 0xfff - pins.i2cReadNumber(I2C_ADDR, NumberFormat.UInt16LE, false);
+    }
+
+    /**
+     * read light sensor
+     * @return {number} 0 ~ 4095, bigger means lighter
+     */
+    //% blockId=readLightsensor block="read light sensor"
+    export function readLightsensor(): number {
+
+        protocolCmd_start(PROTOCOL_READ);
+
+        pins.i2cWriteNumber(I2C_ADDR, PROTOCOL_RD_LIGHT, NumberFormat.UInt8LE, false);
+
+        return 0xfff - pins.i2cReadNumber(I2C_ADDR, NumberFormat.UInt16LE, false);
+    }
+
+    /**
+     * read touch sensor
+     * @return {boolean} 
+     */
+    //% blockId=readTouchsensor block="read touch sensor"
+    export function readTouchsensor(): boolean {
+
+        protocolCmd_start(PROTOCOL_READ);
+
+        pins.i2cWriteNumber(I2C_ADDR, PROTOCOL_RD_TOUCH, NumberFormat.UInt8LE, false);
+
+        let tmp = pins.i2cReadNumber(I2C_ADDR, NumberFormat.UInt8LE, false);
+
+        if (tmp == 1) {
+            return true;
+        }
+        else {
+            return false;
         }
     }
 
     /**
-     * set niko go
-     * @param {Directivon} dir - directivon to go
-     * @param {number} speed - go speed
+     * read ultrasonic sensor
+     * @return {boolean} 
      */
-    //% blockId=setNikoGo block="set niko go %dir speed as %speed"
+    //% blockId=readUltrasonicsensor block="read ultrasonic sensor"
+    export function readUltrasonicsensor(): number {
+
+        protocolCmd_start(PROTOCOL_READ);
+
+        pins.i2cWriteNumber(I2C_ADDR, PROTOCOL_RD_ULTRASONIC, NumberFormat.UInt8LE, false);
+
+        return pins.i2cReadNumber(I2C_ADDR, NumberFormat.UInt16LE, false);
+    }
+
+    /**
+     * read battery volt
+     * @return {nubmer} battery volt
+     */
+    //% blockId=readBatteryvolt block="read battery volt"
+    export function readBatteryvolt(): number {
+
+        protocolCmd_start(PROTOCOL_READ);
+
+        pins.i2cWriteNumber(I2C_ADDR, PROTOCOL_RD_BATT, NumberFormat.UInt8LE, false);
+
+        return pins.i2cReadNumber(I2C_ADDR, NumberFormat.Float32LE, false);
+    }
+
+    /**
+     * read power key
+     * @return {boolean} power key state
+     */
+    //% blockId=readPowerkey block="read power key"
+    export function readPowerkey(): boolean {
+
+        protocolCmd_start(PROTOCOL_READ);
+
+        pins.i2cWriteNumber(I2C_ADDR, PROTOCOL_RD_PWKEY, NumberFormat.UInt8LE, false);
+
+        let tmp = pins.i2cReadNumber(I2C_ADDR, NumberFormat.UInt8LE, false);
+
+        if (tmp == 1) {
+            return true;
+        }
+        else {
+            return false;
+        }
+    }
+
+    /**
+     * read turns of wheel encoder
+     * @param {Motor}  encoder - sequence number of encoders
+     * @return {number} number of wheel's turns
+     * @note if number of pulse over 0xffff/2 ,the data will be error
+     */
+    //% blockId=readEncoder block="read turns of wheel encoder %encoder"
+    export function readTurnsofwheel(encoder: Motor): number {
+
+        protocolCmd_start(PROTOCOL_READ);
+
+        if (encoder == Motor.M1) {
+            pins.i2cWriteNumber(I2C_ADDR, PROTOCOL_RD_ENCODE1, NumberFormat.UInt8LE, false);
+        }
+        else {
+            pins.i2cWriteNumber(I2C_ADDR, PROTOCOL_RD_ENCODE2, NumberFormat.UInt8LE, false);
+        }
+
+        let tmp = pins.i2cReadNumber(I2C_ADDR, NumberFormat.UInt16LE, false);
+
+        // 如果数据大于0xffff一半则按照附负数计算
+        if (tmp > (0xffff / 2)) {
+            tmp = -(0xffff - tmp);
+        }
+        return tmp / (ENCODER_BASE_PULSE * MOTOR_DECELERATION_RATIO);
+    }
+
+    /**
+     * reset encoders
+     */
+    //% blockId=resetEncoder block="reset encoders"
+    export function resetEncoder() {
+
+        protocolCmd_start(PROTOCOL_WRITE);
+        pins.i2cWriteNumber(I2C_ADDR, PROTOCOL_WR_CLR_ENCODE, NumberFormat.UInt8LE, false);
+        pins.i2cWriteNumber(I2C_ADDR, 1, NumberFormat.UInt8LE, false);
+    }
+
+    /**
+     * set fill light state
+     * @param {LedState} state - fill light state
+     */
+    //% blockId=setFilllight block="set color sensor fill light state %state"
+    export function setFilllight(state: LedState) {
+
+        protocolCmd_start(PROTOCOL_WRITE);
+        pins.i2cWriteNumber(I2C_ADDR, PROTOCOL_WR_TCS_LED, NumberFormat.UInt8LE, false);
+
+        if (state == LedState.OFF) {
+            pins.i2cWriteNumber(I2C_ADDR, 0, NumberFormat.UInt8LE, false);
+        }
+        else {
+            pins.i2cWriteNumber(I2C_ADDR, 1, NumberFormat.UInt8LE, false);
+        }
+    }
+
+    /**
+     * calibrate color sensor white balance
+     */
+    //% blockId=calibrateColorsensor block="calibrate color sensor"
+    export function calibrateColorsensor() {
+
+        protocolCmd_start(PROTOCOL_WRITE);
+        pins.i2cWriteNumber(I2C_ADDR, PROTOCOL_WR_TCS_CALI, NumberFormat.UInt8LE, false);
+        pins.i2cWriteNumber(I2C_ADDR, 1, NumberFormat.UInt8LE, false);
+    }
+
+    /**
+     * read color sensor
+     * @return {number} rgb data
+     */
+    //% blockId=readColorsensor block="read color sensor RGB"
+    export function readColorsensor() {
+
+        protocolCmd_start(PROTOCOL_READ);
+
+        pins.i2cWriteNumber(I2C_ADDR, PROTOCOL_RD_COLOR, NumberFormat.UInt8LE, false);
+
+        let bufr = pins.i2cReadBuffer(I2C_ADDR, 3, false);
+
+        return (bufr.getUint8(2) << 16) + (bufr.getUint8(1) << 8) + bufr.getUint8(0);
+    }
+
+    /**
+     * calculate rgb data
+     * @param {number} data - R+G+B data
+     * @return {RGB} rgb - color want to calculate
+     */
+    //% blockId=calcRGB block="calculate color %rgb from RGB data %data"
+    export function calcRGB(rgb: RGB, data: number) {
+        if (rgb == RGB.R) {
+            return ((data >> 16) & 0xff);
+        }
+        else if (rgb == RGB.B) {
+            return ((data >> 8) & 0xff);
+        }
+        else {
+            return (data & 0xff);
+        }
+    }
+
+    /**
+     * set fill light state
+     * @param {Motor} motor - sequence number of motor
+     * @param {number} speed - motor speed -1023~1023
+     */
+    //% blockId=setMotorspeed block="set motor %motor speed %speed"
+    //% inlineInputMode=inline
     //% speed.min=-1023 speed.max=1023
-    //% speed.defl=0
-    //% weight=99
-    export function setNikoGo(dir: Direction, speed: number) {
-        if (dir == Direction.Forward) {
-            setMotorSpeed(Motor.M1, speed);
-            setMotorSpeed(Motor.M2, speed);
-            setMotorSpeed(Motor.M3, speed);
-            setMotorSpeed(Motor.M4, speed);
+    export function setMotorspeed(motor: Motor, speed: number) {
+
+        // 限幅输入参数
+        if (speed > 1023) {
+            speed = 1023;
         }
-        else if (dir == Direction.Backward) {
-            setMotorSpeed(Motor.M1, -speed);
-            setMotorSpeed(Motor.M2, -speed);
-            setMotorSpeed(Motor.M3, -speed);
-            setMotorSpeed(Motor.M4, -speed);
+        else if (speed < -1023) {
+            speed = -1023;
         }
-        else if (dir == Direction.Left) {
-            setMotorSpeed(Motor.M1, speed);
-            setMotorSpeed(Motor.M2, -speed);
-            setMotorSpeed(Motor.M3, speed);
-            setMotorSpeed(Motor.M4, -speed);
+
+        if (motor == Motor.M1) {
+            // 电机换向时先简短刹车一定时间，防止电机电流激增
+            if ((speed > 0) && (_last_M1_speed < 0) || (speed < 0) && (_last_M1_speed > 0)) {
+                setMotorbreak();
+                basic.pause(DIR_CHANGE_BRK_TIME);
+            }
+
+            protocolCmd_start(PROTOCOL_WRITE);
+            pins.i2cWriteNumber(I2C_ADDR, PROTOCOL_WR_MOTOR1, NumberFormat.UInt8LE, false);
+            _last_M1_speed = speed;
         }
-        else if (dir == Direction.Right) {
-            setMotorSpeed(Motor.M1, -speed);
-            setMotorSpeed(Motor.M2, speed);
-            setMotorSpeed(Motor.M3, -speed);
-            setMotorSpeed(Motor.M4, speed);
+        else {
+            if ((speed > 0) && (_last_M2_speed < 0) || (speed < 0) && (_last_M2_speed > 0)) {
+                setMotorbreak();
+                basic.pause(DIR_CHANGE_BRK_TIME);
+            }
+            protocolCmd_start(PROTOCOL_WRITE);
+            pins.i2cWriteNumber(I2C_ADDR, PROTOCOL_WR_MOTOR2, NumberFormat.UInt8LE, false);
+            _last_M2_speed = speed;
         }
-        else if (dir == Direction.Clockwise) {
-            setMotorSpeed(Motor.M1, speed);
-            setMotorSpeed(Motor.M2, speed);
-            setMotorSpeed(Motor.M3, -speed);
-            setMotorSpeed(Motor.M4, -speed);
-        }
-        else if (dir == Direction.AntiClockwise) {
-            setMotorSpeed(Motor.M1, -speed);
-            setMotorSpeed(Motor.M2, -speed);
-            setMotorSpeed(Motor.M3, speed);
-            setMotorSpeed(Motor.M4, speed);
-        }
+        pins.i2cWriteNumber(I2C_ADDR, speed, NumberFormat.Int16LE, false);
     }
 
     /**
-     * set servo
-     * @param {AnalogPin} pin - servo pin 
-     * @param {number} angle - servo angle
+     * set motor break
      */
-    //% blockId=setServo block="set servo pin $pin angle as $angle"
-    //% angle.min=0 angle.max=180
-    //% angle.defl=90
-    //% weight=97
-    export function setServo(pin: AnalogPin, angle: number) {
-        pins.servoWritePin(pin, angle);
+    //% blockId=setMotorbreak block="set motor break"
+    export function setMotorbreak() {
+        protocolCmd_start(PROTOCOL_WRITE);
+        pins.i2cWriteNumber(I2C_ADDR, PROTOCOL_WR_MOTOR_BRK, NumberFormat.UInt8LE, false);
+        pins.i2cWriteNumber(I2C_ADDR, 1, NumberFormat.UInt8LE, false);
     }
 
     /**
-     * Initialize ps2 controller and set pins, should run at first
+     * Initialize ps2 controller and set pins, should run at first.
+     * @param {DigitalPin} dout - DO pin name, eg: DigitalPin.P15
+     * @param {DigitalPin} din - DI pin name, eg: DigitalPin.P14
+     * @param {DigitalPin} clk - CLK pin name, eg: DigitalPin.P13
+     * @param {DigitalPin} cs - CS pin name, eg: DigitalPin.P16
      */
-    //% blockId=initPS2 block="initialize ps2 controller"
-    function initPS2() {
-        ps2.initGamepad(DigitalPin.P15, DigitalPin.P14, DigitalPin.P13, DigitalPin.P16);
+    //% blockId=initPS2 block="initialize ps2 controller DO %dout| DI %din| CLK %clk| CS %cs"
+    //% dout.defl=DigitalPin.P15
+    //% din.defl=DigitalPin.P14
+    //% clk.defl=DigitalPin.P13
+    //% cs.defl=DigitalPin.P16
+    //% inlineInputMode=inline
+    //% subcategory="PS2"
+    export function initPS2(dout: DigitalPin, din: DigitalPin, clk: DigitalPin, cs: DigitalPin) {
+        ps2.initGamepad(dout, din, clk, cs);
     }
 
     /**
      * read data from ps2 controller 
      */
     //% blockId=readPS2 block="read data from ps2 controller"
+    //% subcategory="PS2"
     export function readPS2() {
         ps2.readGamepad();
     }
@@ -273,6 +573,7 @@ namespace niko {
      * @return {boolean} digital button's state
      */
     //% blockId=calcPS2ButtonDigital block="calculate digital button"
+    //% subcategory="PS2"
     export function ps2ButtonDigital(button: ps2.DigitalButton): boolean {
         return ps2.buttonDigital(button);
     }
@@ -283,8 +584,8 @@ namespace niko {
      * @return {number} digital button's state
      */
     //% blockId=calcPS2ButtonAnalog block="calculate analog button"
+    //% subcategory="PS2"
     export function ps2ButtonAnalog(button: ps2.AnalogButton): number {
         return ps2.buttonAnalog(button);
     }
-
 }
