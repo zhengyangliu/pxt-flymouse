@@ -3,6 +3,7 @@
 * @author ArthurZheng
 */
 //% weight=10 icon="\uf135" color=#2896ff
+//% groups=['Basic', 'PS2', 'Motion', 'Sensor', 'others']
 namespace flymouse {
 
     export enum Color {
@@ -136,9 +137,6 @@ namespace flymouse {
     const ENCODER_BASE_PULSE = 7;
     const MOTOR_DECELERATION_RATIO = 30;
 
-    // 储存TCS3200颜色传感器数据
-    let color_sensor = 0;
-
     /**
      * start a protocol command with time pulse check
      * This funciton can provide Too fast command interval
@@ -175,6 +173,7 @@ namespace flymouse {
     //% blockId=initFlymouse block="initialise fly mouse"
     //% weight=100
     //% blockGap=50
+    //% group="Basic"
     export function initFlymouse() {
         while (checkI2c() != true) {
             basic.pause(200)
@@ -187,27 +186,16 @@ namespace flymouse {
         writeOLED(" ");
     }
 
-    //% blockId=writeOLED block="write string %str to OLED"
-    export function writeOLED(str: string) {
+    /**
+     * configure the led by color
+     * @param {number} offset - sequence number of the led
+     * @param {Color} color - color
+     */
+    //% group="Basic"
+    //% blockId=setPixelColor block="set led pixel %led color %color"
+    export function setPixelColor(led: Rgbled, color: Color) {
 
-        // 当指令间隔小于 OLED_CMD_MIN_INTERVAL
-        while ((input.runningTime() - _last_oled_cmd_time) < OLED_CMD_MIN_INTERVAL) {
-            control.waitMicros(10);
-        }
-        _last_oled_cmd_time = input.runningTime();
-
-        // 限制最大字符串打印长度
-        if (str.length > PROTOCOL_I2C_DATA_MAX_LEN) {
-            str = str.slice(0, 18)
-        }
-
-        let bufr = pins.createBuffer(str.length);
-        for (let i = 0; i < str.length; i++) {
-            bufr.setNumber(NumberFormat.UInt8LE, i, str.charCodeAt(i))
-        }
-        protocolCmd_start(PROTOCOL_OLED);
-        pins.i2cWriteNumber(I2C_ADDR, str.length, NumberFormat.UInt8LE, false);
-        pins.i2cWriteBuffer(I2C_ADDR, bufr);
+        setPixelRGB(led, ((color & 0xff0000) >> 16), ((color & 0x00ff00) >> 8), (color & 0x0000ff));
     }
 
     /**
@@ -222,6 +210,7 @@ namespace flymouse {
     //% red.min=0 red.max=255
     //% green.min=0 green.max=255
     //% blue.min=0 blue.max=255
+    //% group="Basic"
     export function setPixelRGB(led: Rgbled, red: number, green: number, blue: number) {
 
         let bufr = pins.createBuffer(3);
@@ -247,15 +236,54 @@ namespace flymouse {
         pins.i2cWriteBuffer(I2C_ADDR, bufr);
     }
 
-    /**
-     * configure the led by color
-     * @param {number} offset - sequence number of the led
-     * @param {Color} color - color
-     */
-    //% blockId=setPixelColor block="set led pixel %led color %color"
-    export function setPixelColor(led: Rgbled, color: Color) {
+    //% blockId=writeOLED block="write string %str to OLED"
+    //% group="Basic"
+    export function writeOLED(str: string) {
 
-        setPixelRGB(led, ((color & 0xff0000) >> 16), ((color & 0x00ff00) >> 8), (color & 0x0000ff));
+        // 当指令间隔小于 OLED_CMD_MIN_INTERVAL
+        while ((input.runningTime() - _last_oled_cmd_time) < OLED_CMD_MIN_INTERVAL) {
+            control.waitMicros(10);
+        }
+        _last_oled_cmd_time = input.runningTime();
+
+        // 限制最大字符串打印长度
+        if (str.length > PROTOCOL_I2C_DATA_MAX_LEN) {
+            str = str.slice(0, 18)
+        }
+
+        let bufr = pins.createBuffer(str.length);
+        for (let i = 0; i < str.length; i++) {
+            bufr.setNumber(NumberFormat.UInt8LE, i, str.charCodeAt(i))
+        }
+        protocolCmd_start(PROTOCOL_OLED);
+        pins.i2cWriteNumber(I2C_ADDR, str.length, NumberFormat.UInt8LE, false);
+        pins.i2cWriteBuffer(I2C_ADDR, bufr);
+    }
+
+    export function writeOLEDnumber(str: string, num: number{
+        writeOLED(str + '=' + num.toString);
+    })
+
+    /**
+     * read touch sensor
+     * @return {boolean} 
+     */
+    //% blockId=readTouchsensor block="read touch sensor"
+    //% group="Sensor"
+    export function readTouchsensor(): boolean {
+
+        protocolCmd_start(PROTOCOL_READ);
+
+        pins.i2cWriteNumber(I2C_ADDR, PROTOCOL_RD_TOUCH, NumberFormat.UInt8LE, false);
+
+        let tmp = pins.i2cReadNumber(I2C_ADDR, NumberFormat.UInt8LE, false);
+
+        if (tmp == 1) {
+            return true;
+        }
+        else {
+            return false;
+        }
     }
 
     /**
@@ -263,6 +291,8 @@ namespace flymouse {
      * @param {IRsensor}  ir - sequence number of ir sensors
      * @return {number} 0 ~ 4095, biger means closer
      */
+    //% group="Sensor"
+    //% weight=200
     //% blockId=readIRsensor block="read infrared sensor %ir"
     export function readIRsensor(ir: IRsensor): number {
 
@@ -291,10 +321,26 @@ namespace flymouse {
     }
 
     /**
+     * read ultrasonic sensor
+     * @return {boolean} 
+     */
+    //% blockId=readUltrasonicsensor block="read ultrasonic sensor"
+    //% group="Sensor"
+    export function readUltrasonicsensor(): number {
+
+        protocolCmd_start(PROTOCOL_READ);
+
+        pins.i2cWriteNumber(I2C_ADDR, PROTOCOL_RD_ULTRASONIC, NumberFormat.UInt8LE, false);
+
+        return pins.i2cReadNumber(I2C_ADDR, NumberFormat.UInt16LE, false);
+    }
+
+    /**
      * read sound sensor
      * @return {number} 0 ~ 4095, bigger means closer
      */
     //% blockId=readSoundsensor block="read sound sensor"
+    //% group="Sensor"
     export function readSoundsensor(): number {
 
         protocolCmd_start(PROTOCOL_READ);
@@ -309,6 +355,8 @@ namespace flymouse {
      * @return {number} 0 ~ 4095, bigger means lighter
      */
     //% blockId=readLightsensor block="read light sensor"
+    //% group="Sensor"
+    //% blockGap=50
     export function readLightsensor(): number {
 
         protocolCmd_start(PROTOCOL_READ);
@@ -319,45 +367,11 @@ namespace flymouse {
     }
 
     /**
-     * read touch sensor
-     * @return {boolean} 
-     */
-    //% blockId=readTouchsensor block="read touch sensor"
-    export function readTouchsensor(): boolean {
-
-        protocolCmd_start(PROTOCOL_READ);
-
-        pins.i2cWriteNumber(I2C_ADDR, PROTOCOL_RD_TOUCH, NumberFormat.UInt8LE, false);
-
-        let tmp = pins.i2cReadNumber(I2C_ADDR, NumberFormat.UInt8LE, false);
-
-        if (tmp == 1) {
-            return true;
-        }
-        else {
-            return false;
-        }
-    }
-
-    /**
-     * read ultrasonic sensor
-     * @return {boolean} 
-     */
-    //% blockId=readUltrasonicsensor block="read ultrasonic sensor"
-    export function readUltrasonicsensor(): number {
-
-        protocolCmd_start(PROTOCOL_READ);
-
-        pins.i2cWriteNumber(I2C_ADDR, PROTOCOL_RD_ULTRASONIC, NumberFormat.UInt8LE, false);
-
-        return pins.i2cReadNumber(I2C_ADDR, NumberFormat.UInt16LE, false);
-    }
-
-    /**
      * read battery volt
      * @return {nubmer} battery volt
      */
     //% blockId=readBatteryvolt block="read battery volt"
+    //% advanced=true
     export function readBatteryvolt(): number {
 
         protocolCmd_start(PROTOCOL_READ);
@@ -372,6 +386,7 @@ namespace flymouse {
      * @return {boolean} power key state
      */
     //% blockId=readPowerkey block="read power key"
+    //% advanced=true
     export function readPowerkey(): boolean {
 
         protocolCmd_start(PROTOCOL_READ);
@@ -389,48 +404,11 @@ namespace flymouse {
     }
 
     /**
-     * read turns of wheel encoder
-     * @param {Motor}  encoder - sequence number of encoders
-     * @return {number} number of wheel's turns
-     * @note if number of pulse over 0xffff/2 ,the data will be error
-     */
-    //% blockId=readEncoder block="read turns of wheel encoder %encoder"
-    export function readTurnsofwheel(encoder: Motor): number {
-
-        protocolCmd_start(PROTOCOL_READ);
-
-        if (encoder == Motor.M1) {
-            pins.i2cWriteNumber(I2C_ADDR, PROTOCOL_RD_ENCODE1, NumberFormat.UInt8LE, false);
-        }
-        else {
-            pins.i2cWriteNumber(I2C_ADDR, PROTOCOL_RD_ENCODE2, NumberFormat.UInt8LE, false);
-        }
-
-        let tmp = pins.i2cReadNumber(I2C_ADDR, NumberFormat.UInt16LE, false);
-
-        // 如果数据大于0xffff一半则按照附负数计算
-        if (tmp > (0xffff / 2)) {
-            tmp = -(0xffff - tmp);
-        }
-        return tmp / (ENCODER_BASE_PULSE * MOTOR_DECELERATION_RATIO);
-    }
-
-    /**
-     * reset encoders
-     */
-    //% blockId=resetEncoder block="reset encoders"
-    export function resetEncoder() {
-
-        protocolCmd_start(PROTOCOL_WRITE);
-        pins.i2cWriteNumber(I2C_ADDR, PROTOCOL_WR_CLR_ENCODE, NumberFormat.UInt8LE, false);
-        pins.i2cWriteNumber(I2C_ADDR, 1, NumberFormat.UInt8LE, false);
-    }
-
-    /**
      * set fill light state
      * @param {LedState} state - fill light state
      */
     //% blockId=setFilllight block="set color sensor fill light state %state"
+    //% group="Sensor"
     export function setFilllight(state: LedState) {
 
         protocolCmd_start(PROTOCOL_WRITE);
@@ -448,6 +426,7 @@ namespace flymouse {
      * calibrate color sensor white balance
      */
     //% blockId=calibrateColorsensor block="calibrate color sensor"
+    //% group="Sensor"
     export function calibrateColorsensor() {
 
         protocolCmd_start(PROTOCOL_WRITE);
@@ -460,6 +439,7 @@ namespace flymouse {
      * @return {number} rgb data
      */
     //% blockId=readColorsensor block="read color sensor RGB"
+    //% group="Sensor"
     export function readColorsensor() {
 
         protocolCmd_start(PROTOCOL_READ);
@@ -477,6 +457,7 @@ namespace flymouse {
      * @return {RGB} rgb - color want to calculate
      */
     //% blockId=calcRGB block="calculate color %rgb from RGB data %data"
+    //% group="Sensor"
     export function calcRGB(rgb: RGB, data: number) {
         if (rgb == RGB.R) {
             return ((data >> 16) & 0xff);
@@ -490,13 +471,14 @@ namespace flymouse {
     }
 
     /**
-     * set fill light state
+     * set motor speed
      * @param {Motor} motor - sequence number of motor
      * @param {number} speed - motor speed -1023~1023
      */
     //% blockId=setMotorspeed block="set motor %motor speed %speed"
     //% inlineInputMode=inline
     //% speed.min=-1023 speed.max=1023
+    //% group="Motion"
     export function setMotorspeed(motor: Motor, speed: number) {
 
         // 限幅输入参数
@@ -534,9 +516,50 @@ namespace flymouse {
      * set motor break
      */
     //% blockId=setMotorbreak block="set motor break"
+    //% group="Motion"
     export function setMotorbreak() {
         protocolCmd_start(PROTOCOL_WRITE);
         pins.i2cWriteNumber(I2C_ADDR, PROTOCOL_WR_MOTOR_BRK, NumberFormat.UInt8LE, false);
+        pins.i2cWriteNumber(I2C_ADDR, 1, NumberFormat.UInt8LE, false);
+    }
+
+    /**
+     * read turns of wheel encoder
+     * @param {Motor}  encoder - sequence number of encoders
+     * @return {number} number of wheel's turns
+     * @note if number of pulse over 0xffff/2 ,the data will be error
+     */
+    //% blockId=readEncoder block="read turns of wheel encoder %encoder"
+    //% group="Motion"
+    export function readTurnsofwheel(encoder: Motor): number {
+
+        protocolCmd_start(PROTOCOL_READ);
+
+        if (encoder == Motor.M1) {
+            pins.i2cWriteNumber(I2C_ADDR, PROTOCOL_RD_ENCODE1, NumberFormat.UInt8LE, false);
+        }
+        else {
+            pins.i2cWriteNumber(I2C_ADDR, PROTOCOL_RD_ENCODE2, NumberFormat.UInt8LE, false);
+        }
+
+        let tmp = pins.i2cReadNumber(I2C_ADDR, NumberFormat.UInt16LE, false);
+
+        // 如果数据大于0xffff一半则按照附负数计算
+        if (tmp > (0xffff / 2)) {
+            tmp = -(0xffff - tmp);
+        }
+        return tmp / (ENCODER_BASE_PULSE * MOTOR_DECELERATION_RATIO);
+    }
+
+    /**
+     * reset encoders
+     */
+    //% blockId=resetEncoder block="reset encoders"
+    //% group="Motion"
+    export function resetEncoder() {
+
+        protocolCmd_start(PROTOCOL_WRITE);
+        pins.i2cWriteNumber(I2C_ADDR, PROTOCOL_WR_CLR_ENCODE, NumberFormat.UInt8LE, false);
         pins.i2cWriteNumber(I2C_ADDR, 1, NumberFormat.UInt8LE, false);
     }
 
@@ -553,7 +576,7 @@ namespace flymouse {
     //% clk.defl=DigitalPin.P13
     //% cs.defl=DigitalPin.P16
     //% inlineInputMode=inline
-    //% subcategory="PS2"
+    //% group="PS2"
     export function initPS2(dout: DigitalPin, din: DigitalPin, clk: DigitalPin, cs: DigitalPin) {
         ps2.initGamepad(dout, din, clk, cs);
     }
@@ -562,7 +585,7 @@ namespace flymouse {
      * read data from ps2 controller 
      */
     //% blockId=readPS2 block="read data from ps2 controller"
-    //% subcategory="PS2"
+    //% group="PS2"
     export function readPS2() {
         ps2.readGamepad();
     }
@@ -573,7 +596,7 @@ namespace flymouse {
      * @return {boolean} digital button's state
      */
     //% blockId=calcPS2ButtonDigital block="calculate digital button"
-    //% subcategory="PS2"
+    //% group="PS2"
     export function ps2ButtonDigital(button: ps2.DigitalButton): boolean {
         return ps2.buttonDigital(button);
     }
@@ -584,7 +607,7 @@ namespace flymouse {
      * @return {number} digital button's state
      */
     //% blockId=calcPS2ButtonAnalog block="calculate analog button"
-    //% subcategory="PS2"
+    //% group="PS2"
     export function ps2ButtonAnalog(button: ps2.AnalogButton): number {
         return ps2.buttonAnalog(button);
     }
