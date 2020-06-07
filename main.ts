@@ -175,6 +175,9 @@ namespace flymouse {
     //% blockGap=50
     //% group="Basic"
     export function initFlymouse() {
+
+        initPS2();
+
         while (checkI2c() != true) {
             basic.pause(200)
         }
@@ -567,20 +570,9 @@ namespace flymouse {
 
     /**
      * Initialize ps2 controller and set pins, should run at first.
-     * @param {DigitalPin} dout - DO pin name, eg: DigitalPin.P15
-     * @param {DigitalPin} din - DI pin name, eg: DigitalPin.P14
-     * @param {DigitalPin} clk - CLK pin name, eg: DigitalPin.P13
-     * @param {DigitalPin} cs - CS pin name, eg: DigitalPin.P16
      */
-    //% blockId=initPS2 block="initialize ps2 controller DO %dout| DI %din| CLK %clk| CS %cs"
-    //% dout.defl=DigitalPin.P15
-    //% din.defl=DigitalPin.P14
-    //% clk.defl=DigitalPin.P13
-    //% cs.defl=DigitalPin.P16
-    //% inlineInputMode=inline
-    //% group="PS2"
-    export function initPS2(dout: DigitalPin, din: DigitalPin, clk: DigitalPin, cs: DigitalPin) {
-        ps2.initGamepad(dout, din, clk, cs);
+    function initPS2() {
+        ps2.initGamepad(DigitalPin.P15, DigitalPin.P14, DigitalPin.P13, DigitalPin.P16);
     }
 
     /**
@@ -597,7 +589,7 @@ namespace flymouse {
      * @param {DigitalButton} button - digital button name, eg: ps2.DigitalButton.Select
      * @return {boolean} digital button's state
      */
-    //% blockId=calcPS2ButtonDigital block="calculate digital button"
+    //% blockId=calcPS2ButtonDigital block="read digital button %button from ps2 data"
     //% group="PS2"
     export function ps2ButtonDigital(button: ps2.DigitalButton): boolean {
         return ps2.buttonDigital(button);
@@ -608,7 +600,7 @@ namespace flymouse {
      * @param {DigitalButton} button - digital button name, eg: ps2.DigitalButton.Select
      * @return {number} digital button's state
      */
-    //% blockId=calcPS2ButtonAnalog block="calculate analog button"
+    //% blockId=calcPS2ButtonAnalog block="read analog button %button from ps2 data"
     //% group="PS2"
     export function ps2ButtonAnalog(button: ps2.AnalogButton): number {
         return ps2.buttonAnalog(button);
