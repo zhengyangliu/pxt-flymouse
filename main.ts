@@ -143,10 +143,12 @@ namespace flymouse {
      */
     function protocolCmd_start(cmd: number) {
 
-        // 当指令间隔小于 I2C_CMD_MIN_INTERVAL
-        while ((input.runningTime() - _last_i2c_cmd_time) < I2C_CMD_MIN_INTERVAL) {
-            control.waitMicros(10);
+        let temp = input.runningTime() - _last_i2c_cmd_time;
+
+        if (temp < I2C_CMD_MIN_INTERVAL) {  //waited too short
+            control.waitMicros(I2C_CMD_MIN_INTERVAL - temp);
         }
+
         _last_i2c_cmd_time = input.runningTime();
 
         pins.i2cWriteNumber(I2C_ADDR, cmd, NumberFormat.UInt8LE, false);
