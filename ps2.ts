@@ -168,17 +168,15 @@ namespace ps2 {
 
         if (temp > 1500) {      //waited to long
             reconfigGamepad();
-            serial.writeString("reconfigGamepad\n")
         }
         if (temp < readDelay) {  //waited too short
             control.waitMicros(readDelay - temp);
-            serial.writeString("waited too short\n")
         }
 
         // Try a few times to get valid data...
         for (let RetryCnt = 0; RetryCnt < 5; RetryCnt++) {
-            // pins.digitalWritePin(DO, 1);
-            // pins.digitalWritePin(CLK, 1);
+            pins.digitalWritePin(DO, 1);
+            pins.digitalWritePin(CLK, 1);
             pins.digitalWritePin(CS, 0);    // low enable joystick
 
             control.waitMicros(CTRL_BYTE_DELAY);
@@ -195,7 +193,6 @@ namespace ps2 {
                 break;
             }
 
-            serial.writeString("If we got to here\n")
             // If we got to here, we are not in analog mode, try to recover...
             reconfigGamepad(); // try to get back into Analog mode.
             control.waitMicros(readDelay);
@@ -203,7 +200,6 @@ namespace ps2 {
 
         // If we get here and still not in analog mode (=0x7_), try increasing the readDelay...
         if ((ps2Data[1] & 0xf0) != 0x70) {
-            serial.writeString("still not in analog mod\n")
             if (readDelay < 10)
                 readDelay++;   // see if this helps out...
         }
