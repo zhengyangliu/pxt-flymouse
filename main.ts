@@ -184,6 +184,15 @@ namespace flymouse {
             basic.pause(200)
         }
 
+        setPixelColor(Rgbled.LED1, Color.Black);
+        setPixelColor(Rgbled.LED2, Color.Black);
+        setPixelColor(Rgbled.LED3, Color.Black);
+        setPixelColor(Rgbled.LED4, Color.Black);
+
+        setMotorbreak();
+
+        setFilllight(flymouse.LedState.OFF);
+
         writeOLED(" ")
         writeOLED("+----------------+");
         writeOLED("| Microbit Onine |");
@@ -439,6 +448,7 @@ namespace flymouse {
         protocolCmd_start(PROTOCOL_WRITE);
         pins.i2cWriteNumber(I2C_ADDR, PROTOCOL_WR_TCS_CALI, NumberFormat.UInt8LE, false);
         pins.i2cWriteNumber(I2C_ADDR, 1, NumberFormat.UInt8LE, false);
+        basic.pause(200);
     }
 
     /**
@@ -469,7 +479,7 @@ namespace flymouse {
         if (rgb == RGB.R) {
             return ((data >> 16) & 0xff);
         }
-        else if (rgb == RGB.B) {
+        else if (rgb == RGB.G) {
             return ((data >> 8) & 0xff);
         }
         else {
@@ -583,7 +593,8 @@ namespace flymouse {
     //% blockId=readPS2 block="read data from ps2 controller"
     //% group="PS2"
     export function readPS2() {
-        ps2.readGamepad();
+        if (ps2.readGamepad() == false)
+            serial.writeString("ps2 x")
     }
 
     /**
