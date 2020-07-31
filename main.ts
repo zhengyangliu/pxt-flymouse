@@ -197,7 +197,7 @@ namespace flymouse {
         writeOLED("+----------------+");
         writeOLED("| Microbit Onine |");
         writeOLED("+----------------+");
-        writeOLED(" ");
+        writeOLED("ID " + control.deviceSerialNumber())
     }
 
     /**
@@ -256,7 +256,7 @@ namespace flymouse {
 
         // 当指令间隔小于 OLED_CMD_MIN_INTERVAL
         while ((input.runningTime() - _last_oled_cmd_time) < OLED_CMD_MIN_INTERVAL) {
-            control.waitMicros(10);
+            control.waitMicros(20);
         }
         _last_oled_cmd_time = input.runningTime();
 
@@ -553,19 +553,15 @@ namespace flymouse {
         protocolCmd_start(PROTOCOL_READ);
 
         if (encoder == Motor.M1) {
-            pins.i2cWriteNumber(I2C_ADDR, PROTOCOL_RD_ENCODE1, NumberFormat.UInt8LE, false);
+            pins.i2cWriteNumber(I2C_ADDR, PROTOCOL_RD_ENCODE1, NumberFormat.Int8LE, false);
         }
         else {
             pins.i2cWriteNumber(I2C_ADDR, PROTOCOL_RD_ENCODE2, NumberFormat.UInt8LE, false);
         }
 
-        let tmp = pins.i2cReadNumber(I2C_ADDR, NumberFormat.UInt16LE, false);
+        let count = pins.i2cReadNumber(I2C_ADDR, NumberFormat.Int32LE, false);
 
-        // 如果数据大于0xffff一半则按照附负数计算
-        if (tmp > (0xffff / 2)) {
-            tmp = -(0xffff - tmp);
-        }
-        return tmp / (ENCODER_BASE_PULSE * MOTOR_DECELERATION_RATIO);
+        return count / (ENCODER_BASE_PULSE * MOTOR_DECELERATION_RATIO);
     }
 
     /**
