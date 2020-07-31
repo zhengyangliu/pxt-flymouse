@@ -196,8 +196,8 @@ namespace flymouse {
         writeOLED(" ")
         writeOLED("+----------------+");
         writeOLED("| Microbit Onine |");
+        writeOLED("| ID " + control.deviceSerialNumber() + "    |");
         writeOLED("+----------------+");
-        writeOLED("ID " + control.deviceSerialNumber())
     }
 
     /**
