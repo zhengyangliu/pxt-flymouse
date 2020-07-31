@@ -134,7 +134,7 @@ namespace flymouse {
     // 电机速度换向后刹车时长
     const DIR_CHANGE_BRK_TIME = 10;
 
-    const ENCODER_BASE_PULSE = 7;
+    const ENCODER_BASE_PULSE = 28;
     const MOTOR_DECELERATION_RATIO = 30;
 
     /**
