@@ -125,8 +125,8 @@ namespace flymouse {
     let _last_i2c_cmd_time = 0;
     let _last_oled_cmd_time = 0;
 
-    const I2C_CMD_MIN_INTERVAL = 1; // 1ms
-    const OLED_CMD_MIN_INTERVAL = 50; // 50ms
+    const I2C_CMD_MIN_INTERVAL = 2; // 2ms
+    const OLED_CMD_MIN_INTERVAL = 60; // 60ms
 
     let _last_M1_speed = 0;
     let _last_M2_speed = 0;
@@ -146,9 +146,8 @@ namespace flymouse {
         let temp = input.runningTime() - _last_i2c_cmd_time;
 
         if (temp < I2C_CMD_MIN_INTERVAL) {  //waited too short
-            control.waitMicros(I2C_CMD_MIN_INTERVAL - temp);
+            basic.pause(I2C_CMD_MIN_INTERVAL - temp)
         }
-
         _last_i2c_cmd_time = input.runningTime();
 
         pins.i2cWriteNumber(I2C_ADDR, cmd, NumberFormat.UInt8LE, false);
@@ -255,8 +254,10 @@ namespace flymouse {
     export function writeOLED(str: string) {
 
         // 当指令间隔小于 OLED_CMD_MIN_INTERVAL
-        while ((input.runningTime() - _last_oled_cmd_time) < OLED_CMD_MIN_INTERVAL) {
-            control.waitMicros(20);
+        let temp = input.runningTime() - _last_oled_cmd_time;
+
+        if (temp < OLED_CMD_MIN_INTERVAL) {  //waited too short
+            basic.pause(OLED_CMD_MIN_INTERVAL - temp)
         }
         _last_oled_cmd_time = input.runningTime();
 
